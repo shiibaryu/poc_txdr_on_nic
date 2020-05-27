@@ -180,7 +180,7 @@ void signal_handler(int signal)
 	nettlp_stop_cb();
 }
 
-static void poll_txd_head_idx(struct tx_desc_ctl *txd_ctl)
+static void poll_txd_tail_idx(struct tx_desc_ctl *txd_ctl)
 {
 	while(txd_ctl->tx_tail_idx == txd_ctl->tx_head_idx){}
 }
@@ -200,7 +200,7 @@ void *mnic_tx(void *arg)
 
 	while(1){
 
-		poll_txd_head_idx(txd_ctl);
+		poll_txd_tail_idx(txd_ctl);
 
 		num = txd_ctl->tx_tail_idx - txd_ctl->tx_head_idx;
 		if(num < 0){
