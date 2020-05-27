@@ -1204,7 +1204,7 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 {
 	struct sk_buff *skb = first->skb;
 	struct mnic_tx_buffer *tx_buff;
-	struct descriptor *tx_desc;
+	struct descriptor tx_desc;
 	//skb_frag_t *frag;
 	dma_addr_t dma;
 	//unsigned int data_len,size;
@@ -1214,7 +1214,7 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	uint32_t pktlen = skb->len;
 	unsigned int size,data_len;
 
-	tx_desc = MNIC_TX_DESC(tx_ring,i);
+	//tx_desc = MNIC_TX_DESC(tx_ring,i);
 	size = skb_headlen(skb);
 	data_len = skb->data_len;
 
@@ -1222,15 +1222,15 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	//dma = dma_map_single(tx_ring->dev,skb_mac_header(skb),pktlen,DMA_TO_DEVICE);
 	//tx_buff = first;
 	
-	tx_desc->addr = dma;
-	tx_desc->length = pktlen;
+	tx_desc.addr = dma;
+	tx_desc.length = pktlen;
 	//dma_map_single(tx_ring->dev,tx_desc,sizeof(struct descriptor),DMA_BIDIRECTIONAL);
 
 	if(dma_mapping_error(tx_ring->dev,dma)){
 		goto dma_error;
 	}
 
-	//pr_info("tx pkt dma addr %#llx, length %lld, q idx %d\n",tx_desc->addr,tx_desc->length,q_idx);
+	pr_info("tx pkt dma addr %#llx, length %lld, q idx %d\n",tx_desc->addr,tx_desc->length,q_idx);
 	/*
 	for(frag = &skb_shinfo(skb)->frags[0];;frag++){
 		if(dma_mapping_error(tx_ring->dev,dma)){
@@ -1288,8 +1288,7 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	}
 	
 	tx_ring->next_to_use = i;
-	adapter->bar4->tx_pkt_addr[q_idx] = dma;
-	adapter->bar4->tx_pkt_len[q_idx] = pktlen;
+	adapter->bar4->tx_pkt_desc[q_idx] = tx_desc;
 	//adapter->bar4->tx_desc_tail[q_idx] = i;
 	pr_info("tail idx is %d, q idx is %d\n",i,q_idx);
 
