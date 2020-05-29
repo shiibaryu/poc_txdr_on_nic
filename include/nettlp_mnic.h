@@ -86,19 +86,6 @@ struct mnic_tx_buffer{
 	uint32_t tx_flags;
 };
 
-struct mnic_rx_buffer{
-	struct descriptor *next_to_watch;
-	dma_addr_t dma;
-	struct page *page;
-
-#if (BITS_PER_LONG > 32) || (PAGE_SIZE >= 65536)
-	uint32_t page_offset;
-#else
-	uint16_t page_offset;
-#endif
-	uint16_t pagecnt_bias;
-};
-
 struct mnic_tx_q_stats{
 	uint64_t packets;
 	uint64_t bytes;	
@@ -128,18 +115,15 @@ struct mnic_ring{
 
 	struct net_device *ndev;
 	struct device *dev;
-	union{
-		struct mnic_tx_buffer *tx_buf_info;
-		struct mnic_rx_buffer *rx_buf_info;
-	};
+	struct mnic_tx_buffer *tx_buf_info;
+
 	void *desc;
 	unsigned long flags;
 	void __iomem *tail;
 	dma_addr_t dma;
 	uint64_t size;
 	uint16_t count;
-	uint8_t queue_idx; //logical index 
-	uint8_t reg_idx; //physical index
+	uint8_t queue_idx; 
 
 	dma_addr_t rx_dma;
 	void *rx_buf;
@@ -147,7 +131,6 @@ struct mnic_ring{
 	uint16_t next_to_clean;
 	uint16_t next_to_use;
 	uint16_t next_to_alloc;
-	uint16_t q_idx;
 
 	union{
 		struct{
@@ -167,12 +150,10 @@ struct mnic_ring{
 struct mnic_q_vector{
 	struct mnic_adapter *adapter;
 	int cpu;
-	uint32_t eims_value;
 	uint8_t total_packets;
 
 	uint16_t itr_val;
 	uint8_t set_itr;
-	void __iomem *itr_register;
 
 	struct mnic_ring_container rx,tx;
 	
@@ -192,7 +173,6 @@ struct mnic_adapter{
 	uint64_t bar4_start;
 	void *bar2;
 
-	uint16_t state;
 	uint8_t flags;
 	
 	uint8_t num_q_vectors;
@@ -206,39 +186,24 @@ struct mnic_adapter{
 	uint16_t tx_work_limit;
 	uint32_t tx_timeout_count;
 	uint8_t num_tx_queues;
-	struct mnic_ring *tx_ring[16];
+	struct mnic_ring *tx_ring[4];
 	
 	uint8_t num_rx_queues;
-	struct mnic_ring *rx_ring[16];
+	struct mnic_ring *rx_ring[4];
 
 	uint32_t max_frame_size;
 	uint32_t min_frame_size;
-
-	uint8_t __iomem *io_addr;
 
 	struct mnic_q_vector *q_vector[MAX_Q_VECTORS];
 	
 	uint16_t tx_ring_count;
 	uint16_t rx_ring_count;
 
-	spinlock_t lock;
-
-	struct tasklet_struct *rx_tasklet;
 	struct napi_struct napi;
 
 	uint8_t msg_enable;
 	uint8_t napi_enabled;
 	uint32_t rss_queues;
-	//struct tx_queue *txq;
-	//struct rx_queue *rxq;
-
-	//struct pkt_buffer *tx_buf;
-	//struct pkt_buffer *rx_buf;
-#define TX_STATE_READY 1
-#define RX_STATE_BUSY  2
-
-	//uint32_t tx_state;	
-	//uint8_t  napi_enabled;
 };
 
 static inline int mnic_desc_unused(struct mnic_ring *ring)
