@@ -798,23 +798,23 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	size = skb_headlen(skb);
 	data_len = skb->data_len;
 
-	//dma = dma_map_single(tx_ring->dev,skb_mac_header(skb),pktlen,DMA_TO_DEVICE);
 	dma = dma_map_single(tx_ring->dev,skb->data,size,DMA_TO_DEVICE);
 	tx_buff = first;
 	
+	/*
 	dma_unmap_len_set(tx_buff,len,size);
 	dma_unmap_addr_set(tx_buff,dma,dma);
 
 	tx_desc->addr = dma;
 	tx_desc->length = pktlen;
+	*/
 
-	pr_info("%s:dma addr is %#llx\n",__func__,dma);
+	pr_info("%s:dma addr is %#llx, skb_headlen %d \n",__func__,dma,size);
 
 	if(dma_mapping_error(tx_ring->dev,dma)){
 		goto dma_error;
 	}
 
-	/*
 	for(frag = &skb_shinfo(skb)->frags[0];;frag++){
 		if(dma_mapping_error(tx_ring->dev,dma)){
 			goto dma_error;
@@ -822,10 +822,9 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 		
 		dma_unmap_len_set(tx_buff,len,size);
 		dma_unmap_addr_set(tx_buff,dma,dma);
-		pr_info("%s: scatter gather \n",__func__);
 	
-		tx_desc->addr = cpu_to_le64(dma);
-		tx_desc->length = skb->len;
+		tx_desc->addr = dma;
+		tx_desc->length = pktlen;
 		
 		while(unlikely(size > MNIC_MAX_DATA_PER_TXD)){
 			i++;
@@ -854,6 +853,8 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 			i = 0;
 		}
 		
+		pr_info("%s: scatter gather \n",__func__);
+
 		size = skb_frag_size(frag);
 		data_len -= size;
 		pr_info("%s: data len is %d\n",__func__,data_len);
@@ -861,7 +862,7 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 		dma = skb_frag_dma_map(tx_ring->dev,frag,0,size,DMA_TO_DEVICE);
 		tx_buff = &tx_ring->tx_buf_info[i];
 	}
-*/
+
 	dma_wmb();
 
 	first->next_to_watch = tx_desc;
@@ -1412,7 +1413,7 @@ static int mnic_probe(struct pci_dev *pdev,const struct pci_device_id *ent)
 	ndev->netdev_ops = &nettlp_mnic_ops;
 	ndev->min_mtu = ETH_MIN_MTU;
 	ndev->max_mtu = ETH_MAX_MTU;
-	//ndev->features = NETIF_F_SG;
+	ndev->features = NETIF_F_SG;
 
 	ret = mnic_sw_init(adapter);
 	if(ret){
