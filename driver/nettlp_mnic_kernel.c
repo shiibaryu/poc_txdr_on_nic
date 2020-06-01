@@ -403,7 +403,6 @@ request_done:
 	return ret;
 }
 
-
 static bool mnic_clean_tx_irq(struct mnic_q_vector *q_vector,int napi_budget)
 {
 	struct mnic_ring *tx_ring = q_vector->tx.ring;
@@ -418,6 +417,7 @@ static bool mnic_clean_tx_irq(struct mnic_q_vector *q_vector,int napi_budget)
 	
 	do{
 		struct descriptor *eop_desc = tx_buff->next_to_watch;
+		pr_info("%s: clean tx irq",__func__);
 		if(!eop_desc){
 			break;
 		}
@@ -426,11 +426,14 @@ static bool mnic_clean_tx_irq(struct mnic_q_vector *q_vector,int napi_budget)
 	
 		tx_buff->next_to_watch = NULL;
 
+		//dma_unmap_single(tx_ring->dev,tx_buff->dma,tx_buff->skb->len,DMA_TO_DEVICE);
 		napi_consume_skb(tx_buff->skb,napi_budget);
-		
-		//dma_unmap_single(tx_ring->dev,dma_unmap_addr(tx_buff,dma),dma_unmap_len(tx_buff,len),DMA_TO_DEVICE);
+
+		pr_info("dma unmap addr %#llx, dma unmap len %d",dma_unmap_addr(tx_buff,dma),dma_unmap_len(tx_buff,len));
+		dma_unmap_single(tx_ring->dev,dma_unmap_addr(tx_buff,dma),dma_unmap_len(tx_buff,len),DMA_TO_DEVICE);
 
 		tx_buff->skb = NULL;
+		dma_unmap_len_set(tx_buff,len,0);
 		while(tx_desc != eop_desc){
 			tx_buff++;
 			tx_desc++;
@@ -439,6 +442,9 @@ static bool mnic_clean_tx_irq(struct mnic_q_vector *q_vector,int napi_budget)
 				i -= tx_ring->count;
 				tx_buff = tx_ring->tx_buf_info;
 				tx_desc = MNIC_TX_DESC(tx_ring,0);
+			}
+			if(dma_unmap_len(tx_buff,len)){
+				pr_info("%s:dma unmmap len happed",__func__);
 			}
 		}
 
@@ -606,9 +612,11 @@ static int mnic_poll(struct napi_struct *napi,int budget)
 	struct mnic_q_vector *q_vector = container_of(napi,struct mnic_q_vector,napi);
 
 	if(q_vector->tx.ring){
+		pr_info("%s:go to clean tx irq",__func__);
 		clean_complete = mnic_clean_tx_irq(q_vector,budget);
 	}
 	if(q_vector->rx.ring){
+		pr_info("%s:go to clean rx irq",__func__);
 		clean_complete = mnic_clean_rx_irq(q_vector,budget);
 	}
 
@@ -714,21 +722,25 @@ static int mnic_open(struct net_device *ndev)
 void mnic_unmap_and_free_tx_resource(struct mnic_ring *ring,
 				    struct mnic_tx_buffer *tx_buffer)
 {
+	struct sk_buff *skb;
+
 	pr_info("%s: start \n",__func__);
 
-	if (tx_buffer->skb) {
-		dev_kfree_skb_any(tx_buffer->skb);
-		if (dma_unmap_len(tx_buffer, len))
-			dma_unmap_single(ring->dev,
-					 dma_unmap_addr(tx_buffer, dma),
-					 dma_unmap_len(tx_buffer, len),
-					 DMA_TO_DEVICE);
-	} else if (dma_unmap_len(tx_buffer, len)) {
-		dma_unmap_page(ring->dev,
-			       dma_unmap_addr(tx_buffer, dma),
-			       dma_unmap_len(tx_buffer, len),
-			       DMA_TO_DEVICE);
+	skb = tx_buffer->skb;
+
+	if(tx_buffer->skb){
+		pr_info("%s: dma_unmap_single the mapped area",__func__);
+		//dma_unmap_single(ring->dev,tx_buffer->dma,skb->len,DMA_TO_DEVICE);
+		dma_unmap_single(ring->dev,dma_unmap_addr(tx_buffer,dma),dma_unmap_len(tx_buffer,len),DMA_TO_DEVICE);
+		pr_info("%s: free skb",__func__);
+		dev_kfree_skb_any(skb);
 	}
+	else{
+		pr_info("%s: dma_unmap_single the mapped area",__func__);
+		//dma_unmap_single(ring->dev,tx_buffer->dma,skb->len,DMA_TO_DEVICE);
+		dma_unmap_single(ring->dev,dma_unmap_addr(tx_buffer,dma),dma_unmap_len(tx_buffer,len),DMA_TO_DEVICE);
+	}
+
 	tx_buffer->next_to_watch = NULL;
 	tx_buffer->skb = NULL;
 	dma_unmap_len_set(tx_buffer, len, 0);
@@ -786,10 +798,17 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	size = skb_headlen(skb);
 	data_len = skb->data_len;
 
+	//dma = dma_map_single(tx_ring->dev,skb_mac_header(skb),pktlen,DMA_TO_DEVICE);
 	dma = dma_map_single(tx_ring->dev,skb->data,size,DMA_TO_DEVICE);
+	tx_buff = first;
 	
+	dma_unmap_len_set(tx_buff,len,size);
+	dma_unmap_addr_set(tx_buff,dma,dma);
+
 	tx_desc->addr = dma;
 	tx_desc->length = pktlen;
+
+	pr_info("%s:dma addr is %#llx\n",__func__,dma);
 
 	if(dma_mapping_error(tx_ring->dev,dma)){
 		goto dma_error;
@@ -865,6 +884,7 @@ dma_error:
 	dev_err(tx_ring->dev, "TX DMA map failed\n");
 
 	for (;;) {
+		pr_info("%s: for dma_unmpa failed",__func__);
 		tx_buff = &tx_ring->tx_buf_info[i];
 		mnic_unmap_and_free_tx_resource(tx_ring, tx_buff);
 		if (tx_buff == first)
@@ -1399,7 +1419,7 @@ static int mnic_probe(struct pci_dev *pdev,const struct pci_device_id *ent)
 		goto err9;		
 	}
 
-	strcpy(ndev->name,"momosiro");
+	strcpy(ndev->name,"mnic");
 	ret = register_netdev(ndev);
 	if(ret){
 		goto err10;
