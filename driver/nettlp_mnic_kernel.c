@@ -877,10 +877,11 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	}
 	tx_ring->next_to_use = i;
 
-	for(;t<i;t++){
+	while(t!=i){
 		adapter->bar4->tx_pkt_addr[q_idx] = tx_desc_prev->addr;
 		adapter->bar4->tx_pkt_len[q_idx] = tx_desc_prev->length;
 		tx_desc_prev++;
+		t++;
 		if(t == tx_ring->count){
 			tx_desc_prev = MNIC_TX_DESC(tx_ring,0);
 			t = 0;
