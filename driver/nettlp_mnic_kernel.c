@@ -784,9 +784,10 @@ static inline int mnic_maybe_stop_tx(struct mnic_ring *ring,const uint16_t size)
 
 static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,const uint8_t hdr_len,struct mnic_adapter *adapter)
 {
+	uint8_t t,num = 0;
 	struct sk_buff *skb = first->skb;
 	struct mnic_tx_buffer *tx_buff = NULL;
-	struct descriptor *tx_desc;
+	struct descriptor *tx_desc,*tx_desc_prev;
 	skb_frag_t *frag;
 	dma_addr_t dma;
 	uint16_t i = tx_ring->next_to_use;
@@ -794,7 +795,10 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	uint32_t pktlen = skb->len;
 	unsigned int size,data_len;
 
+	t = i;
+	tx_desc_prev = MNIC_TX_DESC(tx_ring,i);
 	tx_desc = MNIC_TX_DESC(tx_ring,i);
+
 	size = skb_headlen(skb);
 	data_len = skb->data_len;
 
@@ -871,10 +875,17 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	if(tx_ring->count == i){
 		i=0;
 	}
-	
 	tx_ring->next_to_use = i;
-	adapter->bar4->tx_pkt_addr[q_idx] = dma;
-	adapter->bar4->tx_pkt_len[q_idx] = pktlen;
+
+	for(;t<i;t++){
+		adapter->bar4->tx_pkt_addr[q_idx] = tx_desc_prev->addr;
+		adapter->bar4->tx_pkt_len[q_idx] = tx_desc_prev->length;
+		tx_desc_prev++;
+		if(t == tx_ring->count){
+			tx_desc_prev = MNIC_TX_DESC(tx_ring,0);
+			t = 0;
+		}
+	}
 
 	adapter->ndev->stats.tx_packets++;
 	adapter->ndev->stats.tx_bytes += pktlen;
