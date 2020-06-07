@@ -784,7 +784,6 @@ static inline int mnic_maybe_stop_tx(struct mnic_ring *ring,const uint16_t size)
 
 static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,const uint8_t hdr_len,struct mnic_adapter *adapter)
 {
-	uint8_t t,num = 0;
 	struct sk_buff *skb = first->skb;
 	struct mnic_tx_buffer *tx_buff = NULL;
 	struct descriptor *tx_desc,*tx_desc_prev;
@@ -795,7 +794,6 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 	uint32_t pktlen = skb->len;
 	unsigned int size,data_len;
 
-	t = i;
 	tx_desc_prev = MNIC_TX_DESC(tx_ring,i);
 	tx_desc = MNIC_TX_DESC(tx_ring,i);
 
@@ -827,8 +825,16 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 		dma_unmap_len_set(tx_buff,len,size);
 		dma_unmap_addr_set(tx_buff,dma,dma);
 	
+		dma_wmb();
+
+		adapter->bar4->tx_pkt[q_idx].addr = dma;
+		adapter->bar4->tx_pkt[q_idx].length = pktlen;
+
 		tx_desc->addr = dma;
 		tx_desc->length = pktlen;
+
+		adapter->ndev->stats.tx_packets++;
+		adapter->ndev->stats.tx_bytes += pktlen;
 		
 		while(unlikely(size > MNIC_MAX_DATA_PER_TXD)){
 			i++;
@@ -841,6 +847,12 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 			
 			dma += MNIC_MAX_DATA_PER_TXD;
 			size -= MNIC_MAX_DATA_PER_TXD;
+
+			adapter->bar4->tx_pkt[q_idx].addr = dma;
+			adapter->bar4->tx_pkt[q_idx].length = skb->len;
+
+			adapter->ndev->stats.tx_packets++;
+			adapter->ndev->stats.tx_bytes += skb->len;
 
 			tx_desc->addr = cpu_to_le64(dma);
 			tx_desc->length = skb->len;
@@ -867,8 +879,6 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 		tx_buff = &tx_ring->tx_buf_info[i];
 	}
 
-	dma_wmb();
-
 	first->next_to_watch = tx_desc;
 
 	i++;
@@ -876,20 +886,6 @@ static int mnic_tx_map(struct mnic_ring *tx_ring,struct mnic_tx_buffer *first,co
 		i=0;
 	}
 	tx_ring->next_to_use = i;
-
-	while(t!=i){
-		adapter->bar4->tx_pkt_addr[q_idx] = tx_desc_prev->addr;
-		adapter->bar4->tx_pkt_len[q_idx] = tx_desc_prev->length;
-		tx_desc_prev++;
-		t++;
-		if(t == tx_ring->count){
-			tx_desc_prev = MNIC_TX_DESC(tx_ring,0);
-			t = 0;
-		}
-	}
-
-	adapter->ndev->stats.tx_packets++;
-	adapter->ndev->stats.tx_bytes += pktlen;
 
 	return 0;
 
