@@ -59,8 +59,7 @@ struct mnic_bar4
 {	
 	uint64_t rx_desc_base[4];
 	uint64_t rx_desc_tail[4];
-	uint64_t tx_pkt_addr[4];
-	uint64_t tx_pkt_len[4];
+	struct descriptor tx_pkt[4];
 }__attribute__((packed));
 
 struct mnic_bar0{
