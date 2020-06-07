@@ -17,8 +17,8 @@
 #define TX_NT_SIZE 		4
 #define RX_NT_SIZE 		4
 
-#define MRRS			1550
-#define MPS			1550
+#define MRRS			512
+#define MPS			256
 
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
